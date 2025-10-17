@@ -1,9 +1,11 @@
-use std::fmt::{Debug, Formatter};
-use macroquad::prelude::*;
+use colored::Colorize; // Import ONLY the trait to enable coloring methods on strings
+use std::fmt::{Debug, Display, Formatter};
+use macroquad::prelude::*; // Import Macroquad drawing functions (Color is now unambiguously from Macroquad)
 
-use ::rand::Rng as _; // Import the Rng trait using absolute path
+// CORRECTION: Explicitly import the Rng trait using absolute path to resolve ambiguity
+use ::rand::Rng as _;
 
-// RENDERING CONSTANTS (MACROQUAD)
+// --- RENDERING CONSTANTS (MACROQUAD) ---
 // Dimensions and styles for the grid
 pub const WINDOW_WIDTH: f32 = 600.0;
 const PADDING: f32 = 10.0;
@@ -140,6 +142,13 @@ impl PlayableBoard {
     }
 }
 
+// Implement Display for PlayableBoard (needed for bench.rs console output)
+impl Display for PlayableBoard {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// A board on which the next thing to do is to randomly place a tile (Chance turn - CHANCE Node).
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub struct RandableBoard(Board);
@@ -163,6 +172,13 @@ impl RandableBoard {
     /// Evaluates the current board state using the heuristic function from `eval.rs`.
     pub fn evaluate(&self) -> f32 {
         crate::eval::eval(&self.0)
+    }
+}
+
+// Implement Display for RandableBoard (needed for bench.rs console output)
+impl Display for RandableBoard {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -256,7 +272,16 @@ impl Board {
             .count()
     }
 
-    /// Returns the list of possible successor boards after a move, resulting from placing a random tile (2 or 4) on an empty cell.
+    /// Given a board for which an action has already been applied, returns the list of possible successors as a result of placing a random tile (2 or 4) on an empty cell.
+    ///
+    /// ```rust
+    /// // Example of use:
+    /// // let init = Board::init(); // Assuming init() exists or Board is created
+    /// // let current = init.apply(Action::Left).expect("oups");
+    /// // for (proba, succ_board) in current.random_successors() {
+    /// //   println!("May get the following board with probability {proba}:\n{succ_board}");
+    /// // }
+    /// ```
     pub fn random_successors(&self) -> impl Iterator<Item = (f32, Board)> + '_ {
         let n = self.num_empty() as f32;
 
@@ -311,9 +336,48 @@ impl Board {
 
     /// Applies the action of playing *Left* on all rows
     fn push_left(&mut self) {
+        // apply the push left method on each line
         for row in &mut self.cells {
             push_left(row);
         }
+    }
+}
+
+// Implement Display for Board
+impl Display for Board {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{}", format!("╔═{}╗", "═".repeat(8 * N)).bold())?;
+        for row in &self.cells {
+            write!(f, "{}", "║ ".bold())?;
+            for &cell in row {
+                if cell != 0 {
+                    let value = 2u32.pow(cell as u32);
+                    let formatted = format!("{:^7}", value);
+                    let colored = match value {
+                        2 => formatted.black().on_truecolor(238, 228, 218), // #eee4da
+                        4 => formatted.black().on_truecolor(237, 224, 200), // #ede0c8
+                        8 => formatted.black().on_truecolor(242, 177, 121), // #f2b179
+                        16 => formatted.black().on_truecolor(245, 149, 99), // #f59563
+                        32 => formatted.black().on_truecolor(246, 124, 95), // #f67c5f
+                        64 => formatted.black().on_truecolor(246, 94, 59),  // #f65e3b
+                        128 => formatted.black().on_truecolor(237, 207, 114), // #edcf72
+                        256 => formatted.black().on_truecolor(237, 204, 97), // #edcc61
+                        512 => formatted.black().on_truecolor(237, 200, 80), // #edc850
+                        1024 => formatted.black().on_truecolor(237, 197, 63), // #edc53f
+                        2048 => formatted.black().on_truecolor(237, 194, 46), // 2048 -> #edc22e
+                        _ => formatted.bold().black().on_truecolor(237, 194, 46), // 4096+ -> #edc22e + bold
+                    };
+                    write!(f, "{} ", colored)?;
+                } else {
+                    let formatted = format!("   .   ");
+                    let colored = formatted.black().on_truecolor(205, 193, 180); // #cdc1b4
+                    write!(f, "{} ", colored)?;
+                }
+            }
+            writeln!(f, "{} ", "║".bold())?;
+        }
+        writeln!(f, "{}", format!("╚═{}╝", "═".repeat(8 * N)).bold())?;
+        Ok(())
     }
 }
 
